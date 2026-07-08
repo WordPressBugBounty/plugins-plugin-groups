@@ -1,0 +1,11 @@
+{
+  "src/main.tsx": {
+    "file": "js/main-BiaRTEV3.js",
+    "name": "main",
+    "src": "src/main.tsx",
+    "isEntry": true,
+    "css": [
+      "css/main-K39BPyBe.css"
+    ]
+  }
+}

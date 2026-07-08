@@ -44,15 +44,26 @@ class Extras {
 	 * Enqueue our scripts and data for the bulk actions JS.
 	 */
 	public function enqueue_script() {
+		$manifest_path = PLGGRP_PATH . 'static/manifest.json';
+		if ( ! file_exists( $manifest_path ) ) {
+			return;
+		}
 
-		$asset = include PLGGRP_PATH . 'js/install.asset.php';
-		wp_enqueue_script( 'plugin-groups-install', PLGGRP_URL . 'js/install.js', $asset['dependencies'], $asset['version'], true );
+		$manifest = json_decode( file_get_contents( $manifest_path ), true );
+		if ( ! isset( $manifest['src/extras.js'] ) ) {
+			return;
+		}
 
-		$data = array(
-			'url'   => rest_url( Plugin_Groups::$slug . '/add' ),
-			'nonce' => wp_create_nonce( 'wp_rest' ),
-		);
-		wp_add_inline_script( 'plugin-groups-install', 'var plgData = ' . wp_json_encode( $data ), 'before' );
+		$js_path = PLGGRP_URL . 'static/' . $manifest['src/extras.js']['file'];
+		wp_enqueue_script( 'plugin-groups-bulk', $js_path, [], PLGGRP_VERSION, true );
+
+		$data = [
+			'groups' => $this->plugin_groups->get_groups(),
+			'url'    => rest_url( Plugin_Groups::$slug . '/add' ),
+			'nonce'  => wp_create_nonce( 'wp_rest' ),
+			'siteID' => get_current_blog_id(),
+		];
+		wp_add_inline_script( 'plugin-groups-bulk', 'var plgData = ' . wp_json_encode( $data ), 'before' );
 	}
 
 	/**
@@ -67,13 +78,13 @@ class Extras {
 		$groups      = $this->plugin_groups->get_groups();
 		$last        = array_pop( $actions );
 		$newaction   = array();
-		$newaction[] = '<select disabled=disabled data-plugin="' . $plugin['slug'] . '" style="width:120px;">';
+		$newaction[] = '<select disabled=disabled data-plugin="' . esc_attr( $plugin['slug'] ) . '" style="width:120px;">';
 		$newaction[] = '<option value="_select">';
 		$newaction[] = __( 'Add to group', 'plugin-groups' );
 		$newaction[] = '</option>';
 		foreach ( $groups as $group ) {
-			$newaction[] = '<option value="' . $group['id'] . '">';
-			$newaction[] = $group['name'];
+			$newaction[] = '<option value="' . esc_attr( $group['id'] ) . '">';
+			$newaction[] = esc_html( $group['name'] );
 			$newaction[] = '</option>';
 		}
 		$newaction[] = '</select>';

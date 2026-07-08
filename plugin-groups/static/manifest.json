@@ -1,0 +1,11 @@
+{
+  "src/extras.js": {
+    "file": "js/extras-B46Xjjhw.js",
+    "name": "extras",
+    "src": "src/extras.js",
+    "isEntry": true,
+    "css": [
+      "css/extras-DQPh2Qin.css"
+    ]
+  }
+}

@@ -55,7 +55,7 @@ class Rest {
 
 					if ( is_multisite() ) {
 						$data = $request->get_json_params();
-						$can  = current_user_can_for_blog( $data['siteID'], 'manage_options' );
+						$can  = $this->plugin_groups->can_manage_site_config( $data['siteID'] ?? get_current_blog_id() );
 					} else {
 						$can = current_user_can( 'manage_options' );
 					}
@@ -76,7 +76,7 @@ class Rest {
 
 					$id = $request->get_param( 'siteID' );
 
-					return current_user_can_for_blog( $id, 'manage_options' );
+					return $this->plugin_groups->can_manage_site_config( $id );
 				},
 			)
 		);
@@ -92,7 +92,7 @@ class Rest {
 
 					if ( is_multisite() ) {
 						$data = $request->get_json_params();
-						$can  = current_user_can_for_blog( $data['siteID'], 'manage_options' );
+						$can  = $this->plugin_groups->can_manage_site_config( $data['siteID'] ?? get_current_blog_id() );
 					} else {
 						$can = current_user_can( 'manage_options' );
 					}
@@ -151,12 +151,18 @@ class Rest {
 		$site_id = get_current_blog_id();
 		if ( is_multisite() ) {
 			if ( ! empty( $data['siteID'] ) ) {
-				$site_id = $data['siteID'];
+				$site_id = (int) $data['siteID'];
 				unset( $data['siteID'] );
 			}
-			if ( ! empty( $data['sitesEnabled'] ) ) {
+			if ( isset( $data['sitesEnabled'] ) ) {
 				// Ensure we have the same types.
 				$data['sitesEnabled'] = array_map( 'intval', $data['sitesEnabled'] );
+				$main_site_id         = get_main_site_id();
+				$this->plugin_groups->save_sites_enabled( $data['sitesEnabled'] );
+
+				if ( $main_site_id !== $site_id ) {
+					unset( $data['sitesEnabled'] );
+				}
 			}
 		}
 
