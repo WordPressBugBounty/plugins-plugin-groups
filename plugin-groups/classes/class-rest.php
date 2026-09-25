@@ -55,7 +55,7 @@ class Rest {
 
 					if ( is_multisite() ) {
 						$data = $request->get_json_params();
-						$can  = $this->plugin_groups->can_manage_site_config( $data['siteID'] ?? get_current_blog_id() );
+						$can  = current_user_can_for_site( $data['siteID'], 'manage_options' );
 					} else {
 						$can = current_user_can( 'manage_options' );
 					}
@@ -76,7 +76,7 @@ class Rest {
 
 					$id = $request->get_param( 'siteID' );
 
-					return $this->plugin_groups->can_manage_site_config( $id );
+					return current_user_can_for_site( $id, 'manage_options' );
 				},
 			)
 		);
@@ -92,7 +92,7 @@ class Rest {
 
 					if ( is_multisite() ) {
 						$data = $request->get_json_params();
-						$can  = $this->plugin_groups->can_manage_site_config( $data['siteID'] ?? get_current_blog_id() );
+						$can  = current_user_can_for_site( $data['siteID'], 'manage_options' );
 					} else {
 						$can = current_user_can( 'manage_options' );
 					}
@@ -114,11 +114,13 @@ class Rest {
 
 		$data = $request->get_json_params();
 
-		wp_parse_str( wp_parse_url( $data['url'], PHP_URL_QUERY ), $query );
-
 		$return = array(
-			'success' => $this->plugin_groups->add_to_group( $data['id'], array( $query['plugin'] ) ),
+			'success' => $this->plugin_groups->add_to_group( $data['id'], array( $data['plugin'] ) ),
 		);
+		if( true !== $return['success'] ) {
+			$return['message'] = $return['success'];
+			$return['success'] = false;
+		}
 
 		return rest_ensure_response( $return );
 	}
@@ -151,18 +153,12 @@ class Rest {
 		$site_id = get_current_blog_id();
 		if ( is_multisite() ) {
 			if ( ! empty( $data['siteID'] ) ) {
-				$site_id = (int) $data['siteID'];
+				$site_id = $data['siteID'];
 				unset( $data['siteID'] );
 			}
-			if ( isset( $data['sitesEnabled'] ) ) {
+			if ( ! empty( $data['sitesEnabled'] ) ) {
 				// Ensure we have the same types.
 				$data['sitesEnabled'] = array_map( 'intval', $data['sitesEnabled'] );
-				$main_site_id         = get_main_site_id();
-				$this->plugin_groups->save_sites_enabled( $data['sitesEnabled'] );
-
-				if ( $main_site_id !== $site_id ) {
-					unset( $data['sitesEnabled'] );
-				}
 			}
 		}
 

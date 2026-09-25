@@ -90,7 +90,7 @@ class Plugin_Groups {
 	 * @since 3.0.0
 	 * @var bool|string
 	 */
-	private bool|string $dev_mode = false;
+	public bool|string $dev_mode = false;
 
 	/**
 	 * Hold the record of the plugins current version for upgrade.
@@ -134,7 +134,7 @@ class Plugin_Groups {
 	 */
 	protected function setup_hooks() {
 
-		// Load plugin text domain
+		// Load plugin text domain.
 		add_action( 'init', [ $this, 'plugin_groups_init' ], PHP_INT_MAX ); // Always the last thing to init.
 		add_action( 'admin_init', [ $this, 'admin_init' ] );
 		add_action( 'admin_menu', [ $this, 'admin_menu' ] );
@@ -489,7 +489,7 @@ class Plugin_Groups {
 			}
 		}
 
-		// Add our styles if we have groups;
+		// Add our styles if we have groups.
 		if ( ! empty( $this->groups ) ) {
 			wp_enqueue_style( self::$slug . '-navbar' );
 		}
@@ -507,7 +507,7 @@ class Plugin_Groups {
 	protected function get_nav_url( $id = null ) {
 
 		$url = Utils::get_sanitized_text( INPUT_SERVER, 'REQUEST_URI' );
-		if ( ! $url || false === strpos( $url, 'plugins.php' ) ) {
+		if ( ! $url || false === strpos( 'plugins.php', $url ) ) {
 			// Just in case.
 			$url = self_admin_url( 'plugins.php' );
 		}
@@ -676,7 +676,6 @@ class Plugin_Groups {
 		 *
 		 * @return  array
 		 * @since   2.0.0
-		 *
 		 */
 		$presets       = apply_filters( 'get_preset_plugin_groups', $groups );
 		$preset_groups = [];
@@ -774,7 +773,7 @@ class Plugin_Groups {
 			if ( null === $site_id ) {
 				$site_id = get_current_blog_id();
 			}
-			$success = update_blog_option( $site_id, self::CONFIG_KEY, $this->config );
+			$success = update_network_option( $site_id, self::CONFIG_KEY, $this->config );
 		} else {
 			$success = update_option( self::CONFIG_KEY, $this->config );
 		}
@@ -783,30 +782,10 @@ class Plugin_Groups {
 	}
 
 	/**
-	 * Save the multisite access list on the main site config.
-	 *
-	 * @param array $site_ids Site IDs allowed to manage their own groups.
-	 *
-	 * @return bool
-	 */
-	public function save_sites_enabled( array $site_ids ) {
-
-		$config                  = is_multisite() ? $this->get_stored_config( get_main_site_id() ) : get_option( self::CONFIG_KEY, $this->get_default_config() );
-		$config['sitesEnabled'] = array_values( array_map( 'intval', $site_ids ) );
-
-		if ( is_multisite() ) {
-			return update_blog_option( get_main_site_id(), self::CONFIG_KEY, $config );
-		}
-
-		return update_option( self::CONFIG_KEY, $config );
-	}
-
-	/**
 	 * Autoloader by Locating and finding classes via folder structure.
 	 *
 	 * @param string $class class name to be checked and autoloaded.
 	 */
-
 	function autoload_class( $class ) {
 
 		$class_location = self::locate_class_file( $class );
@@ -926,19 +905,17 @@ class Plugin_Groups {
 	 */
 	public function admin_init() {
 
-		$manifest_path        = PLGGRP_PATH . 'build/manifest.json';
-		$navbar_manifest_path = PLGGRP_PATH . 'static/manifest.json';
-		if ( ! file_exists( $manifest_path ) || ! file_exists( $navbar_manifest_path ) ) {
-			wp_die(
-				__( 'The Plugin Groups build is missing. Please run the build process.', 'plugin-groups' )
-			);
+		$manifest_path = PLGGRP_PATH . 'build/manifest.json';
+		if ( ! file_exists( $manifest_path ) ) {
+			add_action( 'admin_notices', [ $this, 'build_assets_error' ] );
+
+			return;
 		}
-		$manifest        = json_decode( file_get_contents( $manifest_path ), true );
-		$navbar_manifest = json_decode( file_get_contents( $navbar_manifest_path ), true );
-		if ( ! isset( $manifest['src/main.tsx'] ) || ! isset( $navbar_manifest['src/extras.js'] ) ) {
-			wp_die(
-				__( 'The Plugin Groups build is invalid. Please run the build process again.', 'plugin-groups' )
-			);
+
+		$manifest = json_decode( file_get_contents( $manifest_path ), true ); //phpcs:ignore WordPressVIPMinimum.Performance.FetchingRemoteData.FileGetContentsUnknown
+		if ( ! isset( $manifest['src/main.tsx'] ) || ! isset( $manifest['src/styles/navbar.css'] ) ) {
+			add_action( 'admin_notices', [ $this, 'build_assets_error' ] );
+			return;
 		}
 		$js_path = PLGGRP_URL . 'build/' . $manifest['src/main.tsx']['file'];
 		wp_register_script( self::$slug, $js_path, [], PLGGRP_VERSION, [ 'in_footer' => true ] );
@@ -947,8 +924,8 @@ class Plugin_Groups {
 			$css_path = PLGGRP_URL . 'build/' . $manifest['src/main.tsx']['css'][0] ?? '';
 			wp_register_style( self::$slug, $css_path, [], PLGGRP_VERSION );
 		}
-		if ( ! empty( $navbar_manifest['src/extras.js']['css'] ) ) {
-			$css_path = PLGGRP_URL . 'static/' . $navbar_manifest['src/extras.js']['css'][0] ?? '';
+		if ( ! empty( $manifest['src/styles/navbar.css']['file'] ) ) {
+			$css_path = PLGGRP_URL . 'build/' . $manifest['src/styles/navbar.css']['file'] ?? '';
 			wp_register_style( self::$slug . '-navbar', $css_path, [], PLGGRP_VERSION );
 		}
 	}
@@ -983,34 +960,10 @@ class Plugin_Groups {
 	 */
 	protected function site_enabled() {
 
-		return $this->can_manage_site_config( get_current_blog_id() );
-	}
+		$site_id     = get_current_blog_id();
+		$main_config = get_network_option( get_main_site_id(), self::CONFIG_KEY, $this->get_default_config() );
 
-	/**
-	 * Check whether the current user can manage Plugin Groups config for a site.
-	 *
-	 * @param int|null $site_id Site ID to check. Null uses current site.
-	 *
-	 * @return bool
-	 */
-	public function can_manage_site_config( $site_id = null ) {
-
-		if ( ! is_multisite() ) {
-			return current_user_can( 'manage_options' );
-		}
-
-		if ( null === $site_id ) {
-			$site_id = get_current_blog_id();
-		}
-
-		$site_id = (int) $site_id;
-		if ( current_user_can( 'manage_network_options' ) ) {
-			return true;
-		}
-
-		$main_config = $this->get_stored_config( get_main_site_id() );
-
-		return current_user_can_for_site( $site_id, 'manage_options' ) && in_array( $site_id, $main_config['sitesEnabled'], true );
+		return in_array( $site_id, $main_config['sitesEnabled'], true );
 	}
 
 	/**
@@ -1154,7 +1107,7 @@ class Plugin_Groups {
 			if ( ! $site_id ) {
 				$site_id = get_current_blog_id();
 			}
-			$config           = $this->get_stored_config( $site_id );
+			$config           = get_network_option( $site_id, self::CONFIG_KEY, $this->get_default_config() );
 			$config['siteID'] = (int) $site_id;
 		} else {
 			$config = get_option( self::CONFIG_KEY, $this->get_default_config() );
@@ -1173,26 +1126,6 @@ class Plugin_Groups {
 		$config['preset_groups'] = $presets['preset_groups'];
 
 		return $config;
-	}
-
-	/**
-	 * Get persisted config for a multisite blog.
-	 *
-	 * Falls back to the legacy network-option storage location used by earlier
-	 * builds before saving back to the blog's own options table.
-	 *
-	 * @param int $site_id Site ID to load.
-	 *
-	 * @return array
-	 */
-	protected function get_stored_config( $site_id ) {
-
-		$config = get_blog_option( (int) $site_id, self::CONFIG_KEY, false );
-		if ( false === $config ) {
-			$config = get_network_option( (int) $site_id, self::CONFIG_KEY, $this->get_default_config() );
-		}
-
-		return wp_parse_args( $config, $this->get_default_config() );
 	}
 
 	/**
@@ -1421,11 +1354,26 @@ class Plugin_Groups {
 	 */
 	public function add_to_group( $group_id, array $plugin_slugs ) {
 
-		$success = false;
+		$success          = false;
+		$already_in_group = [];
 		if ( isset( $this->config['groups'][ $group_id ] ) ) {
+			foreach ( $plugin_slugs as $slug ) {
+				if ( in_array( $slug, $this->config['groups'][ $group_id ]['plugins'], true ) ) {
+					$already_in_group[] = $slug;
+				}
+			}
 			$new_plugins                                    = array_merge( $this->config['groups'][ $group_id ]['plugins'], $plugin_slugs );
 			$this->config['groups'][ $group_id ]['plugins'] = array_unique( $new_plugins );
 			$success                                        = $this->save_config();
+			if ( ! $success ) {
+				if ( ! empty( $already_in_group ) ) {
+					$message = sprintf(
+						__( 'The following plugins were already in the group: %s', self::$slug ),
+						implode( ', ', $already_in_group )
+					);
+				}
+				$success = ! empty( $already_in_group ) ? $message : false;
+			}
 		}
 
 		return $success;
@@ -1480,5 +1428,13 @@ class Plugin_Groups {
 		}
 
 		return self::$instance;
+	}
+
+	/**
+	 * Output an admin notice if the build assets are missing.
+	 */
+	public function build_assets_error() {
+		$message = __( 'The Plugin Groups build assets are missing. Please run the build process again.', 'plugin-groups' );
+		echo sprintf( '<div id="plugin_groups_error" class="error notice notice-error"><p>%s</p></div>', esc_html( $message ) );
 	}
 }

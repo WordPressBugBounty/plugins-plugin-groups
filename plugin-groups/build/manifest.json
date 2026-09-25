@@ -1,11 +1,20 @@
 {
   "src/main.tsx": {
-    "file": "js/main-BiaRTEV3.js",
+    "file": "js/main-Bd22U5By.js",
     "name": "main",
     "src": "src/main.tsx",
     "isEntry": true,
     "css": [
       "css/main-K39BPyBe.css"
     ]
+  },
+  "src/styles/navbar.css": {
+    "file": "css/styles-DQPh2Qin.css",
+    "name": "styles",
+    "names": [
+      "styles.css"
+    ],
+    "src": "src/styles/navbar.css",
+    "isEntry": true
   }
 }
